@@ -1,0 +1,27 @@
+Compare different server modes with TcompactProtocol,,,
+,,,
+Base on Bytes per second,,,
+Size,Type,Kilobytes (per second),Requests (per second)
+1024,SimpleServer,456,456
+,NonBlockingServer,469,469
+,ThreadPoolServer,9318.4,9320
+,ThreadedSelectorServer,4710.4,4753
+,HsHa,2355.2,2346
+Size,Type,Megabytes (per second),Requests (per second)
+10240,SimpleServer,4.4,449
+,NonBlockingServer,4.5,464
+,ThreadPoolServer,87.9,9006
+,ThreadedSelectorServer,45.3,4640
+,HsHa,22.6,2319
+102400,SimpleServer,42.2,432
+,NonBlockingServer,42,430
+,ThreadPoolServer,564.3,5778
+,ThreadedSelectorServer,369,3779
+,HsHa,212.7,2178
+1,46859,9366,9.1 KB,
+512,46232,9240,4.5 MB,
+1024,46664,9329,9.1 MB,
+4096,46111,9216,36 MB,
+10240,45228,9041,88.3 MB,
+40960,40803,8145,318.2 MB,
+102400,27998,5596,546.5 MB,
