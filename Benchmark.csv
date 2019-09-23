@@ -1,0 +1,12 @@
+Mem/Binary,38
+Mem/Compact,40.8
+Mem/JSON,281.4
+Mem/Buffering/Binary,45.6
+Mem/Buffering/Compact,44.5
+Mem/Buffering/JSON,184.2
+File/Binary,2099.1
+File/Compact,1395.5
+File/JSON,12998.8
+File/Buffering/Binary,397.5
+File/Buffering/Compact,383.8
+File/Buffering/JSON,516
