@@ -201,6 +201,7 @@ public class BenchClient {
                     }
                     try {
                         client.doBenchmark(request);
+                        int bytesSent =
                         runCounter.incrementAndGet();
                     } catch (TException e) {
                         e.printStackTrace();
