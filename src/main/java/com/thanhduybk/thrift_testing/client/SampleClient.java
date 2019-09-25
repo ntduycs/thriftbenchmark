@@ -3,13 +3,15 @@ package com.thanhduybk.thrift_testing.client;
 import com.thanhduybk.thrift_testing.common.ServerModel;
 import com.thanhduybk.thrift_testing.generated.SampleField;
 import com.thanhduybk.thrift_testing.generated.SampleRequest;
+import com.thanhduybk.thrift_testing.generated.SampleResponse;
 import com.thanhduybk.thrift_testing.generated.SampleService;
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.apache.commons.math3.stat.descriptive.SynchronizedDescriptiveStatistics;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TTransportException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -17,131 +19,100 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SampleClient {
-    private volatile boolean runFlag = false;
-    private AtomicInteger runCounter = new AtomicInteger(0);
 
-    // This benchmark makes use TCompactProtocol
+    @Deprecated // All mode will use TCompactProtocol protocol and TFramedTransport(TSocket) transport
     private static ServerModel serverModel = ServerModel.THREADED_SELECTOR;
-    private static int numConnections = 10;
-    private static int step = 1; // actual size will be (64 * step + 8) bytes
 
-    private String host = "localhost";
-    private int port = 5000;
+    public static void main(String[] args) throws TException {
+        int numClients = 20;
+        int concurrentRequestsPerClient = 1; // 10 20 50 100 200
 
-    public static void main(String[] args) {
-        (new SampleClient()).doBenchmark(serverModel, numConnections, step);
-    }
+        int requestSizeInByte = 10000;
+        int execTimeInMs = 1000;
 
-    private void doBenchmark(ServerModel serverModel, int numConnections, int step) {
-        SampleService.Client[] clients = new SampleService.Client[numConnections];
-        for (int i = 0; i < numConnections; i++) {
-            clients[i] = connect(serverModel, host, port);
+        SampleRequest request = generateRequestWith(requestSizeInByte, execTimeInMs);
+        SampleService.Client[] clients = createClients(numClients, "localhost", 5000, request);
+
+        final DescriptiveStatistics statistics = new SynchronizedDescriptiveStatistics();
+
+        ExecutorService executor = Executors.newFixedThreadPool(numClients);
+
+        final AtomicInteger trans = new AtomicInteger(0);
+        final AtomicInteger transOK = new AtomicInteger(0);
+        final CountDownLatch latch = new CountDownLatch(concurrentRequestsPerClient * numClients);
+
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < numClients; i++) {
+            final int k = i; // executor.submit() will run asynchronously
+
+            executor.submit(() -> {
+                for (int j = 0; j < concurrentRequestsPerClient; j++) {
+                    try {
+                        long t = System.currentTimeMillis();
+                        SampleResponse res = clients[k].doBenchmark(request);
+                        t = System.currentTimeMillis() - t;
+
+                        statistics.addValue(t);
+                        trans.incrementAndGet();
+
+                        if (res != null)
+                            transOK.incrementAndGet();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        latch.countDown();
+                    }
+                }
+            });
         }
-        callServiceForEachConnection(clients, step);
+
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        start = System.currentTimeMillis() - start;
+
+        int numRequests = numClients * concurrentRequestsPerClient;
+        System.out.println("Sent " + numRequests + " requests (" + requestSizeInByte + " bytes for each)");
+        System.out.println("Received " + trans.get() + " responses");
+        System.out.println("Received " + transOK.get() + " responses with status OK");
+        System.out.println("Throughput: " + numRequests * 1000 / start + " requests per second");
+
+        System.out.println("Average time per call: " + statistics.getMean() + "ms");
+        System.out.println("Maximum time per call: " + statistics.getMax() + "ms");
+        System.out.println("Minimum time per call: " + statistics.getMin() + "ms");
     }
 
     // Using TCompactProtocol by default
-    private SampleService.Client connect(ServerModel serverModel, String host, int port) {
-        TTransport transport;
+    private static SampleService.Client[] createClients(int numClients, String host, int port, SampleRequest warmUpReq) throws TException {
+//        TTransport transport = new TFramedTransport(new TSocket(host, port));
+        TTransport[] transports = new TTransport[numClients];
+        SampleService.Client[] clients = new SampleService.Client[numClients];
 
-        switch (serverModel) {
-            case SIMPLE:
-            case THREAD_POOL:
-                transport = new TSocket(host, port);
-                break;
-            case NON_BLOCKING:
-            case HSHA:
-            case THREADED_SELECTOR:
-                transport = new TFramedTransport(new TSocket(host, port));
-                break;
-            default:
-                throw new RuntimeException("Unknown server mode: " + serverModel.name());
+        // initialize and warm-up
+        for (int i = 0; i < numClients; i++) {
+            transports[i] = new TFramedTransport(new TSocket(host, port));
+            transports[i].open();
+
+            clients[i] = new SampleService.Client(new TCompactProtocol(transports[i]));
+
+            // do warm-up
+            clients[i].doBenchmark(warmUpReq);
         }
 
-        try {
-            transport.open();
-        } catch (TTransportException e) {
-            transport.close();
-            throw new RuntimeException("Failed to open client transport", e);
-        }
-
-        return new SampleService.Client(new TCompactProtocol(transport));
+        return clients;
     }
 
-    private SampleRequest generateRequestBaseOn(int reqSize) {
+    private static SampleRequest generateRequestWith(int reqSize, int execTimeInMs) {
         final String BASE_STRING = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345678900"; // 64 bytes
-        final String strField = BASE_STRING.repeat(reqSize);
-        final long executionTime = 2000; // lasts 2 seconds, 8 bytes
+        final int loop = reqSize / BASE_STRING.length() + 1;
 
-        return new SampleRequest(new SampleField(SampleField._Fields.STR_FIELD, strField), executionTime);
+        return new SampleRequest(new SampleField(
+                SampleField._Fields.STR_FIELD,
+                BASE_STRING.repeat(loop)
+        ), execTimeInMs);
     }
-
-    private void callServiceForEachConnection(SampleService.Client[] clients, int step) {
-        ExecutorService executor = Executors.newCachedThreadPool();
-
-        // step = 1, 10, 100, 1000, 10000
-        // reqSize = 64, 640, 6400, 64000, 640000 bytes
-        for (int i = 0; i < 5; i++) {
-            SampleRequest request = generateRequestBaseOn((int) (step * Math.pow(10, i)));
-            callService(clients, request, executor, 5000);
-        }
-
-        executor.shutdown();
-    }
-
-    private void callService(SampleService.Client[] clients, SampleRequest request, ExecutorService executor, long delay) {
-        final CountDownLatch starter = new CountDownLatch(1);
-        final CountDownLatch finisher = new CountDownLatch(clients.length);
-
-        runFlag = true;
-        runCounter.set(0);
-
-        // Serve
-        for (final SampleService.Client client : clients) {
-            Runnable task = () -> {
-                try {
-                    starter.await();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException("Failed to execute benchmark.", e);
-                }
-
-                while (true) {
-                    boolean flag = runFlag;
-                    if (!flag) break;
-                    try {
-                        client.doBenchmark(request);
-                        int byteSent = runCounter.incrementAndGet();
-                        System.out.println("\n " + byteSent + "bytes \n");
-                    } catch (TException e) {
-                        throw new RuntimeException("Error when call service", e);
-                    }
-                }
-                // One connection has been served
-                finisher.countDown();
-            };
-            executor.execute(task);
-        }
-
-        long startCountDown = System.currentTimeMillis();
-        starter.countDown();
-
-        while (true) {
-            if ((System.currentTimeMillis() - startCountDown) > delay) break;
-        }
-
-        runFlag = false;
-
-        try {
-            finisher.await();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Failed to execute benchmark.", e);
-        }
-
-        long totalBytesSent = runCounter.get();
-        System.out.println(totalBytesSent);
-        long elapsedTime = System.currentTimeMillis() - startCountDown;
-
-    }
-
 
 }

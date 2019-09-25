@@ -3,7 +3,6 @@ package com.thanhduybk.thrift_testing.server;
 import com.thanhduybk.thrift_testing.common.ServerModel;
 import com.thanhduybk.thrift_testing.generated.SampleService;
 import org.apache.thrift.protocol.TCompactProtocol;
-import org.apache.thrift.protocol.TCompactProtocol.Factory;
 import org.apache.thrift.protocol.TProtocolFactory;
 import org.apache.thrift.server.*;
 import org.apache.thrift.transport.TNonblockingServerSocket;
@@ -13,7 +12,7 @@ import org.apache.thrift.transport.TTransportException;
 
 public class SampleServer {
     // protocol, mode, port, workerThreads
-    private static ServerModel serverModel = ServerModel.THREADED_SELECTOR;
+    private static ServerModel serverModel = ServerModel.THREAD_POOL;
     private static int port = 5000;
     private static int maxWorkerThreads = 20;
     private static int minWorkerThreads = 5;
@@ -48,46 +47,44 @@ public class SampleServer {
             case SIMPLE:
                 TServerSocket tServerSocket = new TServerSocket(port);
                 TServer.Args simpleArgs = new TServer.Args(tServerSocket);
-                simpleArgs.protocolFactory(protocolFactory);
-                simpleArgs.processor(processor);
+                simpleArgs.protocolFactory(protocolFactory).processor(processor);
                 server = new TSimpleServer(simpleArgs);
                 break;
 
             case THREAD_POOL:
                 TServerSocket threadPoolServerSocket = new TServerSocket(port);
                 TThreadPoolServer.Args threadPoolArgs = new TThreadPoolServer.Args(threadPoolServerSocket);
-                threadPoolArgs.protocolFactory(protocolFactory);
-                threadPoolArgs.processor(processor);
-                threadPoolArgs.minWorkerThreads(minWorkerThreads);
-                threadPoolArgs.maxWorkerThreads(maxWorkerThreads);
+                threadPoolArgs.protocolFactory(protocolFactory)
+                        .processor(processor)
+                        .minWorkerThreads(minWorkerThreads)
+                        .maxWorkerThreads(maxWorkerThreads);
                 server = new TThreadPoolServer(threadPoolArgs);
                 break;
 
             case NON_BLOCKING:
                 TNonblockingServerTransport nonblockingServerTransport = new TNonblockingServerSocket(port);
                 TNonblockingServer.Args nonBlockingArgs = new TNonblockingServer.Args(nonblockingServerTransport);
-                nonBlockingArgs.protocolFactory(protocolFactory);
-                nonBlockingArgs.processor(processor);
+                nonBlockingArgs.protocolFactory(protocolFactory).processor(processor);
                 server = new TNonblockingServer(nonBlockingArgs);
                 break;
 
             case HSHA:
                 TNonblockingServerTransport hshaServerTransport = new TNonblockingServerSocket(port);
                 THsHaServer.Args hshaArgs = new THsHaServer.Args(hshaServerTransport);
-                hshaArgs.protocolFactory(protocolFactory);
-                hshaArgs.processor(processor);
-                hshaArgs.minWorkerThreads(minWorkerThreads);
-                hshaArgs.maxWorkerThreads(maxWorkerThreads);
+                hshaArgs.protocolFactory(protocolFactory)
+                        .processor(processor)
+                        .minWorkerThreads(minWorkerThreads)
+                        .maxWorkerThreads(maxWorkerThreads);
                 server = new THsHaServer(hshaArgs);
                 break;
 
             case THREADED_SELECTOR:
                 TNonblockingServerTransport threadedSelectorServerTransport = new TNonblockingServerSocket(port);
                 TThreadedSelectorServer.Args threadedSelectorArgs = new TThreadedSelectorServer.Args(threadedSelectorServerTransport);
-                threadedSelectorArgs.protocolFactory(protocolFactory);
-                threadedSelectorArgs.processor(processor);
-                threadedSelectorArgs.selectorThreads(ioThreads); // I/O threads
-                threadedSelectorArgs.workerThreads(maxWorkerThreads); // processing threads
+                threadedSelectorArgs.protocolFactory(protocolFactory)
+                        .processor(processor)
+                        .selectorThreads(ioThreads)
+                        .workerThreads(maxWorkerThreads);
                 server = new TThreadedSelectorServer(threadedSelectorArgs);
                 break;
 
