@@ -55,6 +55,7 @@ public class SampleService {
             }
         }
 
+
         public Client(org.apache.thrift.protocol.TProtocol prot) {
             super(prot, prot);
         }
