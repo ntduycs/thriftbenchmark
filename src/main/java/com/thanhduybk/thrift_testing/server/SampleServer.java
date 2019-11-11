@@ -12,13 +12,9 @@ import org.apache.thrift.transport.TTransportException;
 
 public class SampleServer {
     // protocol, mode, port, workerThreads
-    private static ServerModel serverModel = ServerModel.THREAD_POOL;
-    private static int port = 5000;
-    private static int maxWorkerThreads = 20;
-    private static int minWorkerThreads = 5;
-    private static int ioThreads = 5;
+    private static ServerModel serverModel = ServerModel.THREADED_SELECTOR;
 
-    private static SampleServer INSTANCE;
+    private static SampleServer INSTANCE = null;
 
     private SampleServer() {
     }
@@ -31,6 +27,10 @@ public class SampleServer {
     public static void main(String[] args) {
         SampleServer sampleServer = getInstance();
         try {
+            int port = 5000;
+            int maxWorkerThreads = 20;
+            int minWorkerThreads = 5;
+            int ioThreads = 5;
             sampleServer.startServer(serverModel, port, maxWorkerThreads, minWorkerThreads, ioThreads);
         } catch (TTransportException e) {
             e.printStackTrace();
